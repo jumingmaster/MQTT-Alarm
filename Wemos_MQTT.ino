@@ -27,21 +27,20 @@
 #define D15 5
 #define SS 15
 #define A0 17
-#define Alarm 15
 #define MQ2 D2
+#define Relay D10
 const char* ssid = "Fatfatpig";               //WIFI-SSID
 const char* password = "h990611.";            //WIFI-PASSWD
-const char* mqttServer = "192.168.1.102";     //Host
+const char* mqttServer = "192.168.1.101";     //Host
 const long mqttPort = 1883;                    //PORT
-const char* TOPIC = "Data";                   //TOPIC
-const char* inTopic="test";//所接收主题的名称
+const char* TOPIC = "一号机";                   //TOPIC
 const char* client_id = "Wemos";              //DEVICE-ID
-char temp[50] = {};
-char smoke[50] = {};
+
 WiFiClient espClient;                         //声明类WIFIClien的对象，该对象允许建立到特点ip和端口的连接
 PubSubClient client(espClient);               //声明类PubSubClient的对象，接受先前定义的WiFiClient 作为构造函数的输入
 DS18B20 ds(D14);                              //声明类DS18B20的对象，初始化D14引脚
 
+/*
 void callback(char* topic, byte* payload, unsigned int length) {
   Serial.print("Message arrived [");
   Serial.print(topic);
@@ -61,7 +60,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   }
 
 }
-
+*/
 
 void reconnect() 
 {
@@ -71,7 +70,7 @@ void reconnect()
     if (client.connect(client_id)) 
     {
       Serial.println("connected");
-      // 连接成功时订阅主题
+      
         
     } 
     else
@@ -92,9 +91,9 @@ void setup()
      pinMode(D14,INPUT);
      pinMode(MQ2,INPUT);
      pinMode(A0,INPUT);
-     pinMode(Alarm,OUTPUT);
+     pinMode(Relay,OUTPUT);
      pinMode(LED_BUILTIN,OUTPUT);
-     digitalWrite(Alarm,LOW);
+     digitalWrite(Relay,HIGH);
      
      WiFi.begin(ssid, password);            //连接WIFI
      while (WiFi.status() != WL_CONNECTED) 
@@ -105,10 +104,9 @@ void setup()
      Serial.println("Connected to the WiFi network");
      
      client.setServer(mqttServer, mqttPort);    //指定MQTT服务器的IP和端口
-     client.setCallback(callback);
-     client.subscribe(TOPIC);
-     client.subscribe(inTopic);
-     while (!client.connected()) 
+
+
+     while (!client.connected())              //连接MQTT
      {
      Serial.println("Connecting to MQTT...");
  
@@ -132,7 +130,7 @@ void setup()
 void loop()
 {
   // put your main code here, to run repeatedly:
-     String msg = "";
+     char msg[10] = {};
      if (!client.connected()) 
      {
         reconnect();
@@ -141,7 +139,26 @@ void loop()
      
      int mq2_flag = digitalRead(MQ2);
      int mq2ppm = 9.67 * analogRead(A0);
-     float tempc = ds.getTempC();
+     double tempc;
+     
+     if(mq2_flag == 0)
+     {
+        
+          digitalWrite(Relay, LOW);
+     }  
+        
+     else
+          digitalWrite(Relay, HIGH);
+        
+    
+     
+     while (ds.selectNext())
+     {
+        tempc = ds.getTempC();
+        snprintf (msg, sizeof(float) + sizeof(int),"%d %.2f",mq2ppm,tempc);
+     }
+
+      
      Serial.print("温度：");
      Serial.print(tempc);
      Serial.println("℃");
@@ -149,24 +166,6 @@ void loop()
      Serial.print(mq2ppm);
      Serial.println("PPM");
      
-     if(mq2_flag == 0)
-     {
-        for(int i = 0; i < 2; i++)
-        {
-          digitalWrite(Alarm,HIGH);
-          delay(500);
-          digitalWrite(Alarm,LOW);
-          delay(500); 
-        }
-        client.publish("Signal","1");
-     }
-     while (ds.selectNext())
-     {
-       snprintf (temp, 50, "当前温度：%.2f℃",ds.getTempC());
-       client.publish(TOPIC,temp);
-     }
-     
-     snprintf (smoke, 50, "当前烟雾浓度：%dPPM",mq2ppm );
-     client.publish(TOPIC,smoke);
+     client.publish(TOPIC,msg);
      delay(5000);
 }
